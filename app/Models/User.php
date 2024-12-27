@@ -2,21 +2,14 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasRoles;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
+    protected $attributes = [];
     protected $fillable = [
         'name',
         'email',
@@ -44,5 +37,76 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function __construct(array $attributes = [])
+    {
+        $this->attributes = $attributes;
+        parent::__construct($attributes);
+    }
+
+    // Override method từ HasRoles trait
+    public function getAllPermissions($keys = null)
+    {
+        return collect($this->attributes['permissions'] ?? [])
+            ->map(function ($permission) {
+                return is_string($permission) ? $permission : $permission['name'];
+            });
+    }
+
+    // Override method từ HasRoles trait
+    public function roles()
+    {
+        return collect($this->attributes['roles'] ?? [])
+            ->map(function ($role) {
+                return is_string($role) ? $role : $role['name'];
+            });
+    }
+
+    // Override method từ HasRoles trait
+    public function hasRole($roles, string $guard = null): bool
+    {
+        if (is_string($roles) && false !== strpos($roles, '|')) {
+            $roles = explode('|', $roles);
+        }
+
+        if (is_string($roles)) {
+            return in_array($roles, $this->getRoleNames()->toArray());
+        }
+
+        if (is_array($roles)) {
+            foreach ($roles as $role) {
+                if (in_array($role, $this->getRoleNames()->toArray())) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // Override method từ HasRoles trait
+    public function hasPermissionTo($permission, $guardName = null): bool
+    {
+        $permissionNames = $this->getAllPermissions()
+            ->map(function ($permission) {
+                return is_string($permission) ? $permission : $permission['name'];
+            })
+            ->toArray();
+
+        return in_array($permission, $permissionNames);
+    }
+
+    public function getRoleNames()
+    {
+        return collect($this->attributes['roles'] ?? [])
+            ->map(function ($role) {
+                return is_string($role) ? $role : $role['name'];
+            });
+    }
+
+    public function hasAnyRole($roles)
+    {
+        return $this->roles()->intersect($roles)->isNotEmpty();
     }
 }
